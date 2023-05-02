@@ -1,4 +1,3 @@
-import xmltodict
 import csv
 import xmltodict
 from xml.etree import ElementTree as ET
