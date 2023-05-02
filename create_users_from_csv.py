@@ -241,6 +241,11 @@ if __name__ == '__main__':
 
             user_list.append(user)
 
+        # Check to make sure there we actually created users
+        if len(user_list) == 0:
+            print('No users created, exiting')
+            my_quit(0, '')
+
         # Now that we have the users created, we need to wait while the platform syncs between QWEB and Portal
         print('Waiting for Portal Sync (120 seconds)')
         sleep(120)
@@ -272,6 +277,8 @@ if __name__ == '__main__':
 
         # Now we have the complete data in the user objects it's time to set the scope and tags
         print('Setting scopes and roles:')
+        if args.debug:
+            print('%d users in user_list' % len(user_list))
         for user in user_list:
             print('\t%s ... ' % user.username, end='')
             url, payload = user.set_role_and_scope_url(baseurl=api.server)
