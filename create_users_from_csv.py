@@ -117,6 +117,9 @@ def get_portal_users(api: QualysAPI.QualysAPI):
                 '#text': '0'
             }
         }
+        'preferences': {
+            'limitResults': 500
+        }
     }}
     payload = xmltodict.unparse(portal_user_dict)
     response = api.makeCall(url='%s/qps/rest/2.0/search/am/user' % api.server, payload=payload)
@@ -295,5 +298,5 @@ if __name__ == '__main__':
 
         # Finally write the usernames and passwords to the output file
         for user in user_list:
-            with open(args.output_file, 'w') as f:
-                f.write('%s,%s' % (user.username, user.password))
+            with open(args.output_file, 'a') as f:
+                f.write('%s,%s\n' % (user.username, user.password))
