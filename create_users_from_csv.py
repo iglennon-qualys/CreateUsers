@@ -1,6 +1,5 @@
 import json
 import csv
-import xmltodict
 from xml.etree import ElementTree as ET
 import QualysAPI
 import argparse
