@@ -1,3 +1,4 @@
+import json
 import requests
 import xml.etree.ElementTree as ET
 from time import sleep
@@ -232,6 +233,8 @@ class QualysAPI:
         if returnwith == 'xml':
             # Return the response as an ElementTree XML object
             return ET.fromstring(resp.text)
+        if returnwith == 'json':
+            return json.loads(resp.text)
         if returnwith == 'text':
             # Return with the response as a text string
             return resp.text

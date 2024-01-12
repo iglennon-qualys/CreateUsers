@@ -1,4 +1,4 @@
-import xmltodict
+import json
 import csv
 import xmltodict
 from xml.etree import ElementTree as ET
@@ -24,6 +24,13 @@ def validate_api_response(response: ET.ElementTree):
             return 2, response.find('.//errorMessage').text
     else:
         return 3, 'Unknown error'
+
+
+def validate_json_response(response: dict):
+    if response['successCode'] == 'SUCCESS':
+        return 0, ''
+    else:
+        return 2, response['Message']
 
 
 def my_quit(exitcode: int, errormsg: str = None):
@@ -54,6 +61,39 @@ class QualysUser:
     scope_tags: list
     username: str
     password: str
+    synced: bool
+
+    def __init__(self, forename: str = '', surname: str = '', title: str = '', phone: str = '', email: str = '',
+                 address1: str = '', city: str = '', country: str = '', external_id: str = '', asset_groups=None,
+                 business_unit: str = '', time_zone_code: str = '', id: str = '', portal_role=None, scope_tags=None,
+                 username: str = '', user_password: str = '', synced: bool = False):
+        self.forename = forename
+        self.surname = surname
+        self.title = title
+        self.phone = phone
+        self.email = email
+        self.address1 = address1
+        self.city = city
+        self.country = country
+        self.external_id = external_id
+        if asset_groups is None:
+            asset_groups = []
+        else:
+            self.asset_groups = asset_groups
+        self.business_unit = business_unit
+        self.time_zone_code = time_zone_code
+        self.id = id
+        if portal_role is None:
+            self.portal_role = []
+        else:
+            self.portal_role = portal_role
+        if scope_tags is None:
+            self.scope_tags = []
+        else:
+            self.scope_tags = scope_tags
+        self.username = username
+        self.password = user_password
+        self.synced = synced
 
     def create_url(self, baseurl: str, send_email: bool = False, user_role: str = 'reader'):
         url = '%s/msp/user.php' % baseurl
@@ -105,28 +145,49 @@ class QualysUser:
         dict_payload['ServiceRequest']['data']['User'].update(self.__scope_tags_url())
         dict_payload['ServiceRequest']['data']['User'].update(self.__role_url())
 
-        return url, xmltodict.unparse(dict_payload)
+        return url, dict_payload
 
 
-def get_portal_users(api: QualysAPI.QualysAPI):
-    portal_user_dict = {'ServiceRequest': {
-        'filters': {
-            'Criteria': {
-                '@field': 'id',
-                '@operator': 'GREATER',
-                '#text': '0'
+def get_portal_users(api: QualysAPI.QualysAPI) -> list[dict]:
+    all_users = []
+    limit_results = 50
+    offset = 0
+
+    service_request = {
+        'ServiceRequest': {
+            'filters': {
+                'Criteria': [{
+                    'field': 'id',
+                    'operator': 'GREATER',
+                    'value': '0'
+                }]
+            },
+            'preferences': {
+                'limitResults': str(limit_results),
             }
         }
-        'preferences': {
-            'limitResults': 500
-        }
-    }}
-    payload = xmltodict.unparse(portal_user_dict)
-    response = api.makeCall(url='%s/qps/rest/2.0/search/am/user' % api.server, payload=payload)
-    error_code, error_message = validate_api_response(response=response)
-    if error_code > 0:
-        my_quit(exitcode=error_code, errormsg='Could not get Portal users: Reason (%s)' % error_message)
-    return response
+    }
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    more_data = True
+    while more_data:
+        response = api.makeCall(url='%s/qps/rest/2.0/search/am/user' % (api.server),
+                                payload=json.dumps(service_request),
+                                headers=headers,
+                                method='POST',
+                                returnwith='json')
+        service_response = response['ServiceResponse']
+        print(service_response)
+        if service_response['responseCode'] != 'SUCCESS':
+            pass
+        if 'hasMoreRecords' in service_response and service_response['hasMoreRecords'] == 'true':
+            more_data = True
+            offset += limit_results
+            service_request['ServiceRequest']['preferences']['startFromOffset'] = str(offset)
+        else:
+            more_data = False
+        all_users += service_response['data']
+
+    return all_users
 
 
 if __name__ == '__main__':
@@ -196,21 +257,21 @@ if __name__ == '__main__':
         for row in csvreader:
             if row[0].find('#') == 0:
                 continue
-            user = QualysUser()
-            user.forename = row[0]
-            user.surname = row[1]
-            user.email = row[2]
-            user.title = row[3]
-            user.portal_role = row[4].split(';')
-            user.scope_tags = row[5].split(';')
-            user.phone = '1234'
-            user.address1 = '22 Acacia Avenue'
-            user.city = 'Acaciaville'
-            user.country = 'United Kingdom'
-            user.business_unit = 'Unassigned'
-            user.time_zone_code = ''
-            user.external_id = None
-            user.id = None
+            user = QualysUser(forename=row[0],
+                              surname=row[1],
+                              email=row[2],
+                              title=row[3],
+                              portal_role=row[4].split(';'),
+                              scope_tags=row[5].split(';'),
+                              phone='1234',
+                              address1='22 Acacia Avenue',
+                              city='Acaciaville',
+                              country='United Kingdom',
+                              business_unit='Unassigned',
+                              time_zone_code='',
+                              external_id='',
+                              id='',
+                              synced=False)
 
             # Generate the URL and payload from the user object
             url, payload = user.create_url(baseurl=api.server, send_email=False, user_role='reader')
@@ -235,7 +296,7 @@ if __name__ == '__main__':
                 else:
                     user.username = response.find('.//USER_LOGIN').text
                     user.password = response.find('.//PASSWORD').text
-                    print('\t%s (%s %s)' % (user.username, user.forename, user.surname))
+                    print(f'\t{user.username} - {user.forename} {user.surname}')
 
             else:
                 # We're running with the "-n" or "--no_call" options, so don't run the API call, just output
@@ -249,54 +310,61 @@ if __name__ == '__main__':
             print('No users created, exiting')
             my_quit(0, '')
 
-        # Now that we have the users created, we need to wait while the platform syncs between QWEB and Portal
-        print('Waiting for Portal Sync (120 seconds)')
-        sleep(120)
+        # Now we need to start a cycle validating user synchronization
+        sleep_time = 30
+        while len([u for u in user_list if not u.synced]) > 0:
+            print(f'{len([u for u in user_list if not u.synced])} users not synced')
+            print(f'Waiting {sleep_time} seconds for sync')
+            sleep(sleep_time)
+            print('Getting Portal Users')
+            portal_users = get_portal_users(api=api)
+            users_to_sync = [u for u in user_list if u.username in [pu['User']['username'] for pu in portal_users] and not u.synced]
 
-        # Now get the Portal User IDs, so first we have to get all users
-        response = get_portal_users(api=api)
+            for user in users_to_sync:
+                print(f'Processing {user.username}')
+                user.id = [u['User']['id'] for u in portal_users if u['User']['username'] == user.username][0]
+                print(f'\t\tSetting roles & scopes')
+                url, payload = user.set_role_and_scope_url(baseurl=api.server)
+                headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+                response = api.makeCall(url=url, payload=payload, method='POST', returnwith='json', headers=headers)
 
-        # With all users in the response, filter out the cruft at the beginning of the output and store the actual
-        # users in users_dict (converting on the fly to a dictionary format with xmltodict.parse()
-        users_dict = xmltodict.parse(ET.tostring(response))['ServiceResponse']['data']['User']
 
-        # For each user that we created, find that user in the list of Portal users and set the ID to match
-        for user in user_list:
-            while user.id is None:
-                portal_user = list(filter(lambda x: x["username"] == user.username, users_dict))
-                if len(portal_user) > 0:
-                    print('Found ID %s for user %s' % (portal_user[0]["id"], user.username))
-                    user.id = portal_user[0]["id"]
-                else:
-                    print('\tERROR: USER ID NOT FOUND!')
-                    if args.exit_on_error:
-                        my_quit(4, 'USER ID NOT FOUND FOR USER %s' % user.username)
-                    else:
-                        print('User ID not found for user %s - waiting 20 seconds for Portal sync' % user.username)
-                        sleep(20)
-                        response = get_portal_users(api=api)
-                        users_dict = xmltodict.parse(ET.tostring(response))['ServiceResponse']['data']['User']
-                        continue
-
-        # Now we have the complete data in the user objects it's time to set the scope and tags
-        print('Setting scopes and roles:')
-        if args.debug:
-            print('%d users in user_list' % len(user_list))
-        for user in user_list:
-            print('\t%s ... ' % user.username, end='')
-            url, payload = user.set_role_and_scope_url(baseurl=api.server)
-            response = api.makeCall(url=url, payload=payload)
-            error_code, error_message = validate_api_response(response)
-            if error_code > 0:
-                if args.exit_on_error:
-                    print('ERROR')
-                    my_quit(exitcode=error_code, errormsg=error_message)
-                else:
-                    print('\nERROR: %s (%s)' % (error_message, error_code))
-            else:
-                print('DONE')
-
-        # Finally write the usernames and passwords to the output file
-        for user in user_list:
-            with open(args.output_file, 'a') as f:
-                f.write('%s,%s\n' % (user.username, user.password))
+        # for user in user_list:
+        #     while user.id is None:
+        #         portal_user = list(filter(lambda x: x["username"] == user.username, users_dict))
+        #         if len(portal_user) > 0:
+        #             print('Found ID %s for user %s' % (portal_user[0]["id"], user.username))
+        #             user.id = portal_user[0]["id"]
+        #         else:
+        #             print('\tERROR: USER ID NOT FOUND!')
+        #             if args.exit_on_error:
+        #                 my_quit(4, 'USER ID NOT FOUND FOR USER %s' % user.username)
+        #             else:
+        #                 print('User ID not found for user %s - waiting 20 seconds for Portal sync' % user.username)
+        #                 sleep(20)
+        #                 response = get_portal_users(api=api)
+        #                 users_dict = xmltodict.parse(ET.tostring(response))['ServiceResponse']['data']['User']
+        #                 continue
+        #
+        # # Now we have the complete data in the user objects it's time to set the scope and tags
+        # print('Setting scopes and roles:')
+        # if args.debug:
+        #     print('%d users in user_list' % len(user_list))
+        # for user in user_list:
+        #     print('\t%s ... ' % user.username, end='')
+        #     url, payload = user.set_role_and_scope_url(baseurl=api.server)
+        #     response = api.makeCall(url=url, payload=payload)
+        #     error_code, error_message = validate_api_response(response)
+        #     if error_code > 0:
+        #         if args.exit_on_error:
+        #             print('ERROR')
+        #             my_quit(exitcode=error_code, errormsg=error_message)
+        #         else:
+        #             print('\nERROR: %s (%s)' % (error_message, error_code))
+        #     else:
+        #         print('DONE')
+        #
+        # # Finally write the usernames and passwords to the output file
+        # for user in user_list:
+        #     with open(args.output_file, 'w') as f:
+        #         f.writelines(['%s,%s' % (user.username, user.password)])
