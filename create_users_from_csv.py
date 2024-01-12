@@ -323,10 +323,21 @@ if __name__ == '__main__':
             for user in users_to_sync:
                 print(f'Processing {user.username}')
                 user.id = [u['User']['id'] for u in portal_users if u['User']['username'] == user.username][0]
-                print(f'\t\tSetting roles & scopes')
+                print(f'\t\tSetting roles & scopes', end='')
                 url, payload = user.set_role_and_scope_url(baseurl=api.server)
                 headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
                 response = api.makeCall(url=url, payload=payload, method='POST', returnwith='json', headers=headers)
+                error_code, error_message = validate_json_response(response)
+                if error_code > 0:
+                    print(f'\nERROR: Could not update roles and scopes for {user.username}')
+                    if args.exit_on_error:
+                        my_quit(exitcode=error_code, errormsg=error_message)
+                    else:
+                        user.synced = True
+                        with open(args.output_file, 'w') as f:
+                            f.writelines(['%s,%s' % (user.username, user.password)])
+                        f.close()
+                        print('DONE')
 
 
         # for user in user_list:
@@ -364,7 +375,7 @@ if __name__ == '__main__':
         #     else:
         #         print('DONE')
         #
-        # # Finally write the usernames and passwords to the output file
-        # for user in user_list:
-        #     with open(args.output_file, 'w') as f:
-        #         f.writelines(['%s,%s' % (user.username, user.password)])
+        # Finally write the usernames and passwords to the output file
+        for user in user_list:
+            with open(args.output_file, 'w') as f:
+                f.writelines(['%s,%s' % (user.username, user.password)])
