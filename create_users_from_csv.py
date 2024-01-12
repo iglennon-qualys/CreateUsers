@@ -27,10 +27,10 @@ def validate_api_response(response: ET.ElementTree):
 
 
 def validate_json_response(response: dict):
-    if response['successCode'] == 'SUCCESS':
+    if response['ServiceResponse']['responseCode'] == 'SUCCESS':
         return 0, ''
     else:
-        return 2, response['Message']
+        return 2, f'{response['ServiceResponse']['responseErrorDetails']['errorMessage']}'
 
 
 def my_quit(exitcode: int, errormsg: str = None):
@@ -122,21 +122,17 @@ class QualysUser:
         return url, payload
 
     def __role_url(self):
-        role_payload = {'roleList': {
-            'add': {'RoleData': []}
-        }
-        }
+        role_payload = {'roleList': {'add': {'RoleData': []}}}
         for role in self.portal_role:
-            role_payload['roleList']['add']['RoleData'].append({'name': {'#text': role}})
+            # role_payload['roleList']['add']['RoleData'].append({'name': {'#text': role}})
+            role_payload['roleList']['add']['RoleData'].append({'name': role})
         return role_payload
 
     def __scope_tags_url(self):
-        scope_payload = {'scopeTags': {
-            'add': {'TagData': []}
-        }
-        }
+        scope_payload = {'scopeTags': {'add': {'TagData': []}}}
         for tag in self.scope_tags:
-            scope_payload['scopeTags']['add']['TagData'].append({'id': {'#text': tag}})
+            # scope_payload['scopeTags']['add']['TagData'].append({'id': {'#text': tag}})
+            scope_payload['scopeTags']['add']['TagData'].append({'id': tag})
         return scope_payload
 
     def set_role_and_scope_url(self, baseurl: str):
@@ -176,7 +172,6 @@ def get_portal_users(api: QualysAPI.QualysAPI) -> list[dict]:
                                 method='POST',
                                 returnwith='json')
         service_response = response['ServiceResponse']
-        print(service_response)
         if service_response['responseCode'] != 'SUCCESS':
             pass
         if 'hasMoreRecords' in service_response and service_response['hasMoreRecords'] == 'true':
@@ -255,7 +250,7 @@ if __name__ == '__main__':
         csvreader = csv.reader(inputfile, delimiter=',', quotechar='"')
         print('Creating users:')
         for row in csvreader:
-            if row[0].find('#') == 0:
+            if row[0].find('#') > -1:
                 continue
             user = QualysUser(forename=row[0],
                               surname=row[1],
@@ -311,7 +306,7 @@ if __name__ == '__main__':
             my_quit(0, '')
 
         # Now we need to start a cycle validating user synchronization
-        sleep_time = 30
+        sleep_time = 15
         while len([u for u in user_list if not u.synced]) > 0:
             print(f'{len([u for u in user_list if not u.synced])} users not synced')
             print(f'Waiting {sleep_time} seconds for sync')
@@ -326,56 +321,17 @@ if __name__ == '__main__':
                 print(f'\t\tSetting roles & scopes', end='')
                 url, payload = user.set_role_and_scope_url(baseurl=api.server)
                 headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
-                response = api.makeCall(url=url, payload=payload, method='POST', returnwith='json', headers=headers)
+                response = api.makeCall(url=url, payload=json.dumps(payload), method='POST', returnwith='json',
+                                        headers=headers)
                 error_code, error_message = validate_json_response(response)
                 if error_code > 0:
                     print(f'\nERROR: Could not update roles and scopes for {user.username}')
                     if args.exit_on_error:
                         my_quit(exitcode=error_code, errormsg=error_message)
-                    else:
-                        user.synced = True
-                        with open(args.output_file, 'w') as f:
-                            f.writelines(['%s,%s' % (user.username, user.password)])
-                        f.close()
-                        print('DONE')
+                else:
+                    user.synced = True
+                    with open(args.output_file, 'a') as f:
+                        f.writelines([f'{user.username}, {user.password}\n'])
+                    f.close()
+                    print('DONE')
 
-
-        # for user in user_list:
-        #     while user.id is None:
-        #         portal_user = list(filter(lambda x: x["username"] == user.username, users_dict))
-        #         if len(portal_user) > 0:
-        #             print('Found ID %s for user %s' % (portal_user[0]["id"], user.username))
-        #             user.id = portal_user[0]["id"]
-        #         else:
-        #             print('\tERROR: USER ID NOT FOUND!')
-        #             if args.exit_on_error:
-        #                 my_quit(4, 'USER ID NOT FOUND FOR USER %s' % user.username)
-        #             else:
-        #                 print('User ID not found for user %s - waiting 20 seconds for Portal sync' % user.username)
-        #                 sleep(20)
-        #                 response = get_portal_users(api=api)
-        #                 users_dict = xmltodict.parse(ET.tostring(response))['ServiceResponse']['data']['User']
-        #                 continue
-        #
-        # # Now we have the complete data in the user objects it's time to set the scope and tags
-        # print('Setting scopes and roles:')
-        # if args.debug:
-        #     print('%d users in user_list' % len(user_list))
-        # for user in user_list:
-        #     print('\t%s ... ' % user.username, end='')
-        #     url, payload = user.set_role_and_scope_url(baseurl=api.server)
-        #     response = api.makeCall(url=url, payload=payload)
-        #     error_code, error_message = validate_api_response(response)
-        #     if error_code > 0:
-        #         if args.exit_on_error:
-        #             print('ERROR')
-        #             my_quit(exitcode=error_code, errormsg=error_message)
-        #         else:
-        #             print('\nERROR: %s (%s)' % (error_message, error_code))
-        #     else:
-        #         print('DONE')
-        #
-        # Finally write the usernames and passwords to the output file
-        for user in user_list:
-            with open(args.output_file, 'w') as f:
-                f.writelines(['%s,%s' % (user.username, user.password)])
