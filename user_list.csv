@@ -1,1 +1,1 @@
-﻿#Firstname,Surname,Email,Title,Roles,Scopes
+﻿#Firstname*,Surname*,Email*,Title*,Phone*,Address1*,City*,Country-Code*,Business Unit,Time Zone Code*,External ID,Portal Roles,Scope Tags
