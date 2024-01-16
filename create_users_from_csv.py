@@ -185,6 +185,7 @@ def get_portal_users(api: QualysAPI.QualysAPI) -> list[dict]:
 
 
 if __name__ == '__main__':
+
     # Add arguments to be collected from the command line
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--filename', help='Input CSV file containing user information')
