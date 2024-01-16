@@ -34,18 +34,21 @@ options:
 
 ## CSV Columns
 The columns in the CSV file need to be in the following order
-Firstname       (required) The first name of the user
-Surname         (required) The surname of the user
-Email           (required) The email address of the user
-Title           (required) The title of the user
-Phone           (required) The phone number of the user
-Address1        (required) The first line of the user's address
-Country-Code    (required) The Country Code for the user
-Business Unit   (optional) The user's assigned Business Unit
-Time Zone Code  (optional) The user's Time Zone Code (see time_zone_codes.json)
-External ID     (optional) The External ID for the user
-Roles           (optional) Semi-colon (;) separated list of roles to be assigned to the user
-Scopes          (optional) Semi-colon (;) separated list of tag IDs to be assigned to the user as scope tags
+
+| Column Content  | Required/Optional | Description                                                                       |
+|:-----------------|:-----------------:|:----------------------------------------------------------------------------------|
+| Firstname       |    (required)     | The first name of the user                                                        |
+| Surname         |    (required)     | The surname of the user                                                           |
+| Email           |    (required)     | The email address of the user                                                     |
+| Title           |    (required)     | The title of the user                                                             |
+| Phone           |    (required)     | The phone number of the user                                                      |
+| Address1        |    (required)     | The first line of the user's address                                              |
+| Country-Code    |    (required)     | The Country Code for the user                                                     |
+| Business Unit   |    (optional)     | The user's assigned Business Unit                                                 |
+| Time Zone Code  |    (optional)     | The user's Time Zone Code (see time_zone_codes.json)                              |
+| External ID     |    (optional)     | The External ID for the user                                                      |
+| Roles           |    (optional)     | Semi-colon (;) separated list of roles to be assigned to the user                 |
+| Scopes          |    (optional)     | Semi-colon (;) separated list of tag IDs to be assigned to the user as scope tags |
 
 ### Example
 
