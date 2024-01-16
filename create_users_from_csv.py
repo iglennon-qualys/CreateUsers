@@ -29,7 +29,7 @@ def validate_json_response(response: dict):
     if response['ServiceResponse']['responseCode'] == 'SUCCESS':
         return 0, ''
     else:
-        return 2, f'{response['ServiceResponse']['responseErrorDetails']['errorMessage']}'
+        return 2, f"{response['ServiceResponse']['responseErrorDetails']['errorMessage']}"
 
 
 def my_quit(exitcode: int, errormsg: str = None):
@@ -61,11 +61,15 @@ class QualysUser:
     username: str
     password: str
     synced: bool
+    created: bool
 
     def __init__(self, forename: str = '', surname: str = '', title: str = '', phone: str = '', email: str = '',
                  address1: str = '', city: str = '', country: str = '', external_id: str = '', asset_groups=None,
                  business_unit: str = '', time_zone_code: str = '', id: str = '', portal_role=None, scope_tags=None,
-                 username: str = '', user_password: str = '', synced: bool = False):
+                 username: str = '', user_password: str = '', synced: bool = False, created: bool = False):
+        with open('time_zone_codes.json', 'r') as f:
+            tzdata = json.load(f)
+        tzs = [tz['TIME_ZONE_CODE'] for tz in tzdata]
         self.forename = forename
         self.surname = surname
         self.title = title
@@ -79,8 +83,14 @@ class QualysUser:
             asset_groups = []
         else:
             self.asset_groups = asset_groups
-        self.business_unit = business_unit
-        self.time_zone_code = time_zone_code
+        if business_unit == '' or business_unit is None:
+            self.business_unit = 'Unassigned'
+        else:
+            self.business_unit = business_unit
+        if time_zone_code not in tzs:
+            self.time_zone_code = ''
+        else:
+            self.time_zone_code = time_zone_code
         self.id = id
         if portal_role is None:
             self.portal_role = []
@@ -93,6 +103,7 @@ class QualysUser:
         self.username = username
         self.password = user_password
         self.synced = synced
+        self.created = created
 
     def create_url(self, baseurl: str, send_email: bool = False, user_role: str = 'reader'):
         url = '%s/msp/user.php' % baseurl
@@ -107,8 +118,8 @@ class QualysUser:
             'city': self.city,
             'country': self.country,
             'user_role': user_role,
-            'business_unit': self.business_unit,
-            'time_zone_code': self.time_zone_code
+            'time_zone_code': self.time_zone_code,
+            'business_unit': self.business_unit
         }
         if self.external_id is not None:
             payload['external_id'] = self.external_id
@@ -184,6 +195,7 @@ def get_portal_users(api: QualysAPI.QualysAPI) -> list[dict]:
     return all_users
 
 
+# Script entry point
 if __name__ == '__main__':
 
     # Add arguments to be collected from the command line
@@ -196,6 +208,7 @@ if __name__ == '__main__':
     parser.add_argument('-U', '--proxy_url', help='HTTPS proxy address')
     parser.add_argument('-a', '--apiurl', help='Qualys API URL (e.g. https://qualysapi.qualys.com)')
     parser.add_argument('-n', '--no_call', action='store_true', help='Do not make API calls, write URLs to console')
+    parser.add_argument('-R', '--role', help='Default user role, defaults to "READER" ("SCANNER" | "READER" | "MANAGER")')
     parser.add_argument('-d', '--debug', action='store_true', help='Provide debugging output from API calls')
     parser.add_argument('-x', '--exit_on_error', action='store_true', help='Exit on error')
 
@@ -228,6 +241,14 @@ if __name__ == '__main__':
     if args.output_file is None or args.output_file == '':
         my_quit(1, 'Output file not specified')
 
+    if args.role is None or args.role == '':
+        args.role = 'reader'
+    else:
+        if args.role in ['READER', 'SCANNER', 'MANAGER']:
+            args.role = args.role.lower()
+        else:
+            my_quit(1, f'User role not recognised - {args.role}')
+
     # Get the Password interactively if '-' is used in that argument
     if args.password == '-':
         password = getpass.getpass(prompt='Enter password : ')
@@ -256,20 +277,20 @@ if __name__ == '__main__':
                               surname=row[1],
                               email=row[2],
                               title=row[3],
-                              portal_role=row[4].split(';'),
-                              scope_tags=row[5].split(';'),
-                              phone='1234',
-                              address1='22 Acacia Avenue',
-                              city='Acaciaville',
-                              country='United Kingdom',
-                              business_unit='Unassigned',
-                              time_zone_code='',
-                              external_id='',
+                              phone=row[4],
+                              address1=row[5],
+                              city=row[6],
+                              country=row[7],
+                              business_unit=row[8],
+                              time_zone_code=row[9],
+                              external_id=row[10],
+                              portal_role=row[11].split(';'),
+                              scope_tags=row[12].split(';'),
                               id='',
                               synced=False)
 
             # Generate the URL and payload from the user object
-            url, payload = user.create_url(baseurl=api.server, send_email=False, user_role='reader')
+            url, payload = user.create_url(baseurl=api.server, send_email=False, user_role=args.role)
 
             # If we are not running with the "-n" or "--no-call" option, run the API call to create the user
             if not args.no_call:
@@ -288,10 +309,12 @@ if __name__ == '__main__':
                     print('ERROR: Could not create user %s %s (%s) : Reason (%s)' % (user.forename, user.surname,
                                                                                      user.email, error_message))
                 # Otherwise it was successful, so we record the username and password in the user object
+                # and set its 'created' attribute to True
                 else:
                     user.username = response.find('.//USER_LOGIN').text
                     user.password = response.find('.//PASSWORD').text
                     print(f'\t{user.username} - {user.forename} {user.surname}')
+                    user.created = True
 
             else:
                 # We're running with the "-n" or "--no_call" options, so don't run the API call, just output
@@ -307,8 +330,8 @@ if __name__ == '__main__':
 
         # Now we need to start a cycle validating user synchronization
         sleep_time = 15
-        while len([u for u in user_list if not u.synced]) > 0:
-            print(f'{len([u for u in user_list if not u.synced])} users not synced')
+        while len([u for u in user_list if u.created and not u.synced]) > 0:
+            print(f'{len([u for u in user_list if u.created and not u.synced])} users not synced')
             print(f'Waiting {sleep_time} seconds for sync')
             sleep(sleep_time)
             print('Getting Portal Users')
@@ -318,7 +341,7 @@ if __name__ == '__main__':
             for user in users_to_sync:
                 print(f'Processing {user.username}')
                 user.id = [u['User']['id'] for u in portal_users if u['User']['username'] == user.username][0]
-                print(f'\t\tSetting roles & scopes', end='')
+                print(f'\t\tSetting roles & scopes... ', end='')
                 url, payload = user.set_role_and_scope_url(baseurl=api.server)
                 headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
                 response = api.makeCall(url=url, payload=json.dumps(payload), method='POST', returnwith='json',
