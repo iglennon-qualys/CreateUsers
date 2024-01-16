@@ -29,7 +29,7 @@ def validate_json_response(response: dict):
     if response['ServiceResponse']['responseCode'] == 'SUCCESS':
         return 0, ''
     else:
-        return 2, f'{response['ServiceResponse']['responseErrorDetails']['errorMessage']}'
+        return 2, f"{response['ServiceResponse']['responseErrorDetails']['errorMessage']}"
 
 
 def my_quit(exitcode: int, errormsg: str = None):
@@ -184,6 +184,7 @@ def get_portal_users(api: QualysAPI.QualysAPI) -> list[dict]:
     return all_users
 
 
+# Script entry point
 if __name__ == '__main__':
 
     # Add arguments to be collected from the command line
