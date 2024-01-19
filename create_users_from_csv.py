@@ -62,13 +62,16 @@ class QualysUser:
     password: str
     synced: bool
     created: bool
+    portal_updated: bool
 
     def __init__(self, forename: str = '', surname: str = '', title: str = '', phone: str = '', email: str = '',
                  address1: str = '', city: str = '', country: str = '', external_id: str = '', asset_groups=None,
                  business_unit: str = '', time_zone_code: str = '', id: str = '', portal_role=None, scope_tags=None,
-                 username: str = '', user_password: str = '', synced: bool = False, created: bool = False):
+                 username: str = '', user_password: str = '', synced: bool = False, created: bool = False,
+                 portal_updated: bool = False):
         with open('time_zone_codes.json', 'r') as f:
             tzdata = json.load(f)
+        f.close()
         tzs = [tz['TIME_ZONE_CODE'] for tz in tzdata]
         self.forename = forename
         self.surname = surname
@@ -104,6 +107,7 @@ class QualysUser:
         self.password = user_password
         self.synced = synced
         self.created = created
+        self.portal_updated = portal_updated
 
     def create_url(self, baseurl: str, send_email: bool = False, user_role: str = 'reader'):
         url = '%s/msp/user.php' % baseurl
@@ -349,12 +353,19 @@ if __name__ == '__main__':
                 error_code, error_message = validate_json_response(response)
                 if error_code > 0:
                     print(f'\nERROR: Could not update roles and scopes for {user.username}')
+                    user.synced = True
+                    user.portal_updated = False
                     if args.exit_on_error:
                         my_quit(exitcode=error_code, errormsg=error_message)
                 else:
                     user.synced = True
+                    user.portal_updated = True
                     with open(args.output_file, 'a') as f:
-                        f.writelines([f'{user.username}, {user.password}\n'])
+                        f.writelines([f'* {user.username}, {user.password}\n'])
                     f.close()
                     print('DONE')
+            print(f'{len([u for u in user_list if not u['User']['portal_synced']])} users did not have roles/scopes'
+                  f' applied')
+            for u in [user for user in user_list if not user['User']['portal_synced']]:
+                print(u.username)
 
