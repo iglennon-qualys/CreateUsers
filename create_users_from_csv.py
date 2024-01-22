@@ -332,6 +332,9 @@ if __name__ == '__main__':
             print('No users created, exiting')
             my_quit(0, '')
 
+        if args.no_call:
+            my_quit(0, 'No API calls made, nothing to synchronize')
+
         # Now we need to start a cycle validating user synchronization
         sleep_time = 15
         while len([u for u in user_list if u.created and not u.synced]) > 0:
@@ -364,8 +367,8 @@ if __name__ == '__main__':
                         f.writelines([f'* {user.username}, {user.password}\n'])
                     f.close()
                     print('DONE')
-            print(f'{len([u for u in user_list if not u['User']['portal_synced']])} users did not have roles/scopes'
+            print(f'{len([u for u in user_list if not u.synced])} users did not have roles/scopes'
                   f' applied')
-            for u in [user for user in user_list if not user['User']['portal_synced']]:
+            for u in [user for user in user_list if not user.synced]:
                 print(u.username)
 
